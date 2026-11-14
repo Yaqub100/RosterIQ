@@ -39,6 +39,26 @@ const initialRoster = [
 function App() {
   const [active, setActive] = useState("Overview");
   const [employees, setEmployees] = useState(initialEmployees);
+  const [brands, setBrands] = useState([
+    { id: "BR-01", name: "Nova Living", workingRule: "All days", process: "Customer Support", employeeIds: [1, 2] },
+    { id: "BR-02", name: "Urban Nest", workingRule: "Sundays & holidays off", process: "Customer Support, ACC, NDR", employeeIds: [2, 3, 6] },
+    { id: "BR-03", name: "Daily Dose", workingRule: "Except public holidays", process: "Customer Support", employeeIds: [4, 5] },
+    { id: "BR-04", name: "Pure Earth", workingRule: "All days", process: "Retention", employeeIds: [1] }
+  ]);
+  const [pods, setPods] = useState([
+    { id: "POD-01", name: "North Pod", leadId: 5 },
+    { id: "POD-02", name: "South Pod", leadId: 6 },
+    { id: "POD-03", name: "East Pod", leadId: 4 },
+    { id: "POD-04", name: "West Pod", leadId: 3 }
+  ]);
+  const [processes, setProcesses] = useState([
+    { id: "PR-01", name: "Customer Support", code: "CS", workingRule: "All days" },
+    { id: "PR-02", name: "Abandoned Cart Conversion", code: "ACC", workingRule: "Except public holidays" },
+    { id: "PR-03", name: "Retention", code: "RET", workingRule: "Sundays & holidays off" },
+    { id: "PR-04", name: "Non-Delivery Report", code: "NDR", workingRule: "All days" }
+  ]);
+  const [managerForm, setManagerForm] = useState({});
+  const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
@@ -191,7 +211,46 @@ function App() {
 
           {active === "Conflicts" && <section className="panel conflicts-page"><div className="panel-heading"><div><h2>Roster conflicts</h2><p>Resolve these issues before publishing your roster.</p></div><span className="issue-count">3 open issues</span></div><Conflict tone="red" title="Coverage gap detected" detail="Nova Living · Customer Support · No available assigned employee for Sunday coverage." time="High priority"/><Conflict tone="amber" title="Weekly off overlap" detail="Urban Nest · NDR · Two assigned employees have overlapping weekly offs." time="Medium priority"/><Conflict tone="amber" title="Leave approval pending" detail="Daily Dose · Ananya Patel · Availability needs manager confirmation." time="Medium priority"/></section>}
 
-          {!["Overview","Employees","Monthly roster","Conflicts"].includes(active) && <section className="panel empty-module"><div className="empty-icon"><Workflow size={25}/></div><h2>{active} management</h2><p>This module is part of the RosterIQ build roadmap. We’ll connect it to the shared workspace data in the next development step.</p><button className="button button-primary" onClick={() => setActive("Overview")}>Back to overview</button></section>}
+          {active === "Brands" && <ManagementPage
+            title="Brand directory" description="Create brands, define operating calendars, and assign employees."
+            records={brands} employees={employees} kind="brand" editingId={editingId} form={managerForm}
+            setForm={setManagerForm} onEdit={item => { setEditingId(item.id); setManagerForm({...item, employeeIds: item.employeeIds || []}); }}
+            onCancel={() => { setEditingId(null); setManagerForm({}); }}
+            onSave={() => {
+              if (!managerForm.name?.trim()) return notify("Enter a brand name.");
+              const item = {...managerForm, id: editingId || `BR-${String(Date.now()).slice(-5)}`, employeeIds: managerForm.employeeIds || []};
+              setBrands(old => editingId ? old.map(x => x.id === editingId ? item : x) : [...old, item]);
+              setEditingId(null); setManagerForm({}); notify(editingId ? "Brand updated." : "Brand added.");
+            }}
+            onDelete={id => { setBrands(old => old.filter(x => x.id !== id)); notify("Brand deleted."); }}
+          />}
+          {active === "Pods" && <ManagementPage
+            title="Operational pods" description="Organise employees into pods and assign a pod lead."
+            records={pods} employees={employees} kind="pod" editingId={editingId} form={managerForm}
+            setForm={setManagerForm} onEdit={item => { setEditingId(item.id); setManagerForm({...item}); }}
+            onCancel={() => { setEditingId(null); setManagerForm({}); }}
+            onSave={() => {
+              if (!managerForm.name?.trim()) return notify("Enter a pod name.");
+              const item = {...managerForm, id: editingId || `POD-${String(Date.now()).slice(-5)}`};
+              setPods(old => editingId ? old.map(x => x.id === editingId ? item : x) : [...old, item]);
+              setEditingId(null); setManagerForm({}); notify(editingId ? "Pod updated." : "Pod added.");
+            }}
+            onDelete={id => { setPods(old => old.filter(x => x.id !== id)); notify("Pod deleted."); }}
+          />}
+          {active === "Processes" && <ManagementPage
+            title="Process directory" description="Configure operational processes and their working-day rules."
+            records={processes} employees={employees} kind="process" editingId={editingId} form={managerForm}
+            setForm={setManagerForm} onEdit={item => { setEditingId(item.id); setManagerForm({...item}); }}
+            onCancel={() => { setEditingId(null); setManagerForm({}); }}
+            onSave={() => {
+              if (!managerForm.name?.trim()) return notify("Enter a process name.");
+              const item = {...managerForm, id: editingId || `PR-${String(Date.now()).slice(-5)}`, code: (managerForm.code || managerForm.name.slice(0,3)).toUpperCase()};
+              setProcesses(old => editingId ? old.map(x => x.id === editingId ? item : x) : [...old, item]);
+              setEditingId(null); setManagerForm({}); notify(editingId ? "Process updated." : "Process added.");
+            }}
+            onDelete={id => { setProcesses(old => old.filter(x => x.id !== id)); notify("Process deleted."); }}
+          />}
+          {active === "Availability" && <section className="panel"><div className="panel-heading"><div><h2>Employee availability</h2><p>Review employee status and weekly off settings.</p></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>EMPLOYEE</th><th>POD</th><th>WEEKLY OFF</th><th>AVAILABILITY</th></tr></thead><tbody>{employees.map(e=><tr key={e.id}><td>{e.name}</td><td>{e.pod}</td><td>{e.weeklyOff || "Not configured"}</td><td><span className={`status-pill ${e.status === "Active" ? "working" : "off"}`}><i/>{e.status}</span></td></tr>)}</tbody></table></div></section>}
           <footer className="footer"><span>© 2026 RosterIQ. Built for better workforce planning.</span><span>Demo workspace <i/> All systems operational</span></footer>
         </div>
       </main>
@@ -200,6 +259,37 @@ function App() {
       {notice && <div className="toast"><CheckCircle2 size={17}/>{notice}</div>}
     </div>
   );
+}
+
+
+function ManagementPage({title,description,records,employees,kind,editingId,form,setForm,onEdit,onCancel,onSave,onDelete}) {
+  const set = (key,value) => setForm(old => ({...old,[key]:value}));
+  const selectedEmployees = form.employeeIds || [];
+  const toggleEmployee = id => set("employeeIds", selectedEmployees.includes(id) ? selectedEmployees.filter(x=>x!==id) : [...selectedEmployees,id]);
+  const leadName = id => employees.find(e=>String(e.id)===String(id))?.name || "Not assigned";
+  return <section className="panel roster-panel">
+    <div className="panel-heading"><div><h2>{title}</h2><p>{description}</p></div><span className="issue-count">{records.length} records</span></div>
+    <form className="manager-form" onSubmit={e=>{e.preventDefault();onSave();}}>
+      <div className="manager-form-grid">
+        <label>{kind === "brand" ? "Brand name" : kind === "pod" ? "Pod name" : "Process name"}
+          <input value={form.name || ""} onChange={e=>set("name",e.target.value)} placeholder={kind === "brand" ? "e.g. Nova Fashion" : kind === "pod" ? "e.g. Alpha Pod" : "e.g. Customer Support"} required/>
+        </label>
+        {kind === "brand" && <label>Operating calendar<select value={form.workingRule || "All days"} onChange={e=>set("workingRule",e.target.value)}><option>All days</option><option>Except public holidays</option><option>Sundays & holidays off</option></select></label>}
+        {kind === "brand" && <label>Processes<input value={form.process || ""} onChange={e=>set("process",e.target.value)} placeholder="Customer Support, NDR"/></label>}
+        {kind === "pod" && <label>Pod lead<select value={form.leadId || ""} onChange={e=>set("leadId",e.target.value)}><option value="">Select pod lead</option>{employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select></label>}
+        {kind === "process" && <><label>Short code<input value={form.code || ""} onChange={e=>set("code",e.target.value)} placeholder="e.g. CS" maxLength="6"/></label><label>Working-day rule<select value={form.workingRule || "All days"} onChange={e=>set("workingRule",e.target.value)}><option>All days</option><option>Except public holidays</option><option>Sundays & holidays off</option></select></label></>}
+      </div>
+      {kind === "brand" && <div className="manager-assign"><strong>Assign employees</strong><div className="employee-checks">{employees.map(e=><label key={e.id}><input type="checkbox" checked={selectedEmployees.includes(e.id)} onChange={()=>toggleEmployee(e.id)}/>{e.name}</label>)}</div></div>}
+      <div className="modal-actions"><button type="button" className="button button-secondary" onClick={onCancel}>Clear</button><button type="submit" className="button button-primary"><Plus size={15}/>{editingId ? "Save changes" : `Add ${kind}`}</button></div>
+    </form>
+    <div className="table-scroll"><table className="data-table"><thead><tr>{kind==="brand" ? <><th>BRAND</th><th>OPERATING RULE</th><th>PROCESSES</th><th>ASSIGNED EMPLOYEES</th></> : kind==="pod" ? <><th>POD</th><th>POD LEAD</th><th>TEAM MEMBERS</th></> : <><th>PROCESS</th><th>CODE</th><th>WORKING-DAY RULE</th></>}<th>ACTIONS</th></tr></thead>
+      <tbody>{records.map(item=><tr key={item.id}>
+        {kind==="brand" ? <><td><strong>{item.name}</strong></td><td>{item.workingRule}</td><td>{item.process || "—"}</td><td>{(item.employeeIds||[]).map(id=>employees.find(e=>e.id===id)?.name).filter(Boolean).join(", ") || "Unassigned"}</td></>
+        : kind==="pod" ? <><td><strong>{item.name}</strong></td><td>{leadName(item.leadId)}</td><td>{employees.filter(e=>e.pod===item.name).length}</td></>
+        : <><td><strong>{item.name}</strong></td><td>{item.code}</td><td>{item.workingRule}</td></>}
+        <td><div className="row-actions"><button className="button button-secondary small-button" type="button" onClick={()=>onEdit(item)}>Edit</button><button className="button button-secondary small-button danger-button" type="button" onClick={()=>onDelete(item.id)}>Delete</button></div></td>
+      </tr>)}</tbody></table>{records.length===0 && <div className="no-results">No records yet. Add the first one above.</div>}</div>
+  </section>;
 }
 
 function StatCard({label,value,change,trend,icon,tone}) {
